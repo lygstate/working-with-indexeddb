@@ -2,129 +2,150 @@
 <html>
 <head>
 </head>
-    
+
 <body>
 
 <script>
 var db;
 
 function indexedDBOk() {
-	return "indexedDB" in window;
+  return "indexedDB" in window;
 }
 
 document.addEventListener("DOMContentLoaded", function() {
 
-	//No support? Go in the corner and pout.
-	if(!indexedDBOk) return;
+  //No support? Go in the corner and pout.
+  if(!indexedDBOk) return;
+  //indexedDB.deleteDatabase("idarticle_people6");
+  //return;
 
-	var openRequest = indexedDB.open("idarticle_people6",1);
+  var openRequest = indexedDB.open("idarticle_people15",1);
 
-	openRequest.onupgradeneeded = function(e) {
-		var thisDB = e.target.result;
+  openRequest.onupgradeneeded = function(e) {
+    var thisDB = e.target.result;
 
-		if(!thisDB.objectStoreNames.contains("people")) {
-			var os = thisDB.createObjectStore("people", {autoIncrement:true});
-			//I want to get by name later
-			os.createIndex("name", "name", {unique:false});
-			//I want email to be unique
-			os.createIndex("email", "email", {unique:true});
-		}
-	}
+    if(!thisDB.objectStoreNames.contains("people")) {
+      var os = thisDB.createObjectStore("people", {autoIncrement: false });
+      //I want to get by name later
+      os.createIndex("name", null, {unique:false});
+      //I want email to be unique
+      os.createIndex("email", null, {unique: false});
+    }
+  }
 
-	openRequest.onsuccess = function(e) {
+  openRequest.onsuccess = function(e) {
 
-		db = e.target.result;
+    db = e.target.result;
 
-		//Listen for add clicks
-		document.querySelector("#addButton").addEventListener("click", addPerson, false);
+    //Listen for add clicks
+    document.querySelector("#addButton").addEventListener("click", addPerson, false);
 
-		//Listen for get clicks
-		document.querySelector("#getButton").addEventListener("click", getPeople, false);
+    //Listen for get clicks
+    document.querySelector("#getButton").addEventListener("click", getPeople, false);
 
-	}	
+  }  
 
-	openRequest.onerror = function(e) {
-		//Do something for the error
-	}
+  openRequest.onerror = function(e) {
+    //Do something for the error
+  }
 
 
 },false);
 
 
 function addPerson(e) {
-	var name = document.querySelector("#name").value;
-	var email = document.querySelector("#email").value;
+  var id = document.querySelector("#id").value;
+  var name = document.querySelector("#name").value;
+  var email = document.querySelector("#email").value;
 
-	console.log("About to add "+name+"/"+email);
+  console.log("About to add "+name+"/"+email + ":" + id);
 
-	//Get a transaction
-	//default for OS list is all, default for type is read
-	var transaction = db.transaction(["people"],"readwrite");
-	//Ask for the objectStore
-	var store = transaction.objectStore("people");
+  addThing(function() {
+    addThing(null, id, name, email);
+  }, id, name, email);
 
-	//Define a person
-	var person = {
-		name:name,
-		email:email,
-		created:new Date()
-	}
+}
 
-	//Perform the add
-	var request = store.add(person);
+function addThing(resolve, name, email, id) {
+  //Get a transaction
+  //default for OS list is all, default for type is read
+  var transaction = db.transaction(["people"],"readwrite");
+  //Ask for the objectStore
+  var store = transaction.objectStore("people");
 
-	request.onerror = function(e) {
-		alert("Sorry, that email address already exists.");
-		console.log("Error",e.target.error.name);
-		console.dir(e.target);
-		//some type of error handler
-	}
+  //Define a person
 
-	request.onsuccess = function(e) {
-		console.log("Woot! Did it");
-	}
+  //Perform the add
+  var request = store.add({
+    name:name,
+    email:email
+  }, id);
+
+  transaction.oncomplete = function (e) {
+    console.log("oncomplete! Did it");
+    resolve&& resolve(e);
+  };
+  transaction.onerror = function ( e ) {
+    e.preventDefault()
+    console.log("onerror!",e.target.error.name);
+  };
+  transaction.onabort = function ( e ) {
+    console.log("onabort!",e.target.error.name);
+    resolve&& resolve(e);
+  };
+
+  request.onerror = function(e) {
+    console.log("request onerror",e.target.error.name);
+    //console.dir(e.target);
+    //some type of error handler
+  }
+
+  request.onsuccess = function(e) {
+    console.log("onsuccess!");
+  }
 }
 
 function getPeople(e) {
-	var name = document.querySelector("#nameSearch").value;
+  var name = document.querySelector("#nameSearch").value;
 
-	var endname = document.querySelector("#nameSearchEnd").value;
+  var endname = document.querySelector("#nameSearchEnd").value;
 
-	if(name == "" && endname == "") return;
+  if(name == "" && endname == "") return;
 
-	var transaction = db.transaction(["people"],"readonly");
-	var store = transaction.objectStore("people");
-	var index = store.index("name");
+  var transaction = db.transaction(["people"],"readonly");
+  var store = transaction.objectStore("people");
+  var index = store.index("name");
 
-	//Make the range depending on what type we are doing
-	var range;
-	if(name != "" && endname != "") {
-		range = IDBKeyRange.bound(name, endname);
-	} else if(name == "") {
-		range = IDBKeyRange.upperBound(endname);
-	} else {
-		range = IDBKeyRange.lowerBound(name);
-	}
+  //Make the range depending on what type we are doing
+  var range;
+  if(name != "" && endname != "") {
+    range = IDBKeyRange.bound(name, endname);
+  } else if(name == "") {
+    range = IDBKeyRange.upperBound(endname);
+  } else {
+    range = IDBKeyRange.lowerBound(name);
+  }
 
-	var s = "";
+  var s = "";
 
-	index.openCursor(range).onsuccess = function(e) {
-		var cursor = e.target.result;
-		if(cursor) {
-			s += "<h2>Key "+cursor.key+"</h2><p>";
-			for(var field in cursor.value) {
-				s+= field+"="+cursor.value[field]+"<br/>";
-			}
-			s+="</p>";
-			cursor.continue();
-		}
-		document.querySelector("#status").innerHTML = s;
-	}
+  index.openCursor(range).onsuccess = function(e) {
+    var cursor = e.target.result;
+    if(cursor) {
+      s += "<h2>Key "+cursor.key+"</h2><p>";
+      for(var field in cursor.value) {
+        s+= field+"="+cursor.value[field]+"<br/>";
+      }
+      s+="</p>";
+      cursor.continue();
+    }
+    document.querySelector("#status").innerHTML = s;
+  }
 
 }
 
 </script>
 
+<input type="text" id="id" placeholder="ID"><br/>
 <input type="text" id="name" placeholder="Name"><br/>
 <input type="email" id="email" placeholder="Email"><br/>
 <button id="addButton">Add Data</button>
